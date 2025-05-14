@@ -6,6 +6,7 @@ from langchain.chat_models import init_chat_model
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode, tools_condition
+from langchain.schema import SystemMessage # It will be used to give system prompts
 from openai import OpenAI
 from pydantic import BaseModel
 
@@ -14,9 +15,13 @@ import os
 os.environ["GOOGLE_API_KEY"] = os.getenv("GEMENI_API_KEY")
 
 @tool
-def run_command(command):
-    """Takes a multiline command as input and executes a shell command and returns exit status."""
-    result = os.system(command)
+def run_command(cmd: str):
+    """
+    Takes a command as input and executes it on the user's machine.
+    For a multiline command use cat << EOF format.
+    Example: run_command(cmd = "ls") where ls is the command to list the files.
+    """
+    result = os.system(cmd)
     return result
 
 tools = [run_command]
@@ -30,7 +35,13 @@ llm = ChatGoogleGenerativeAI(
 llm_with_tools = llm.bind_tools(tools = tools)
 
 def chatbot(state: State):
-    return {"messages": [llm_with_tools.invoke(state["messages"])]}
+    system_prompt = SystemMessage(content="""
+        Your an AI coding assistant who takes input from the user and based on the available tools
+        you choose the correct tool and execute the command.
+        You can even execute the commands and help user with the output of the command.
+        Always make sure that you keep your generated code and files in ai_generated/ folder. You can create one if not already  there.
+    """)
+    return {"messages": [llm_with_tools.invoke([system_prompt] + state["messages"])]}
 
 
 
